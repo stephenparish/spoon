@@ -1,15 +1,25 @@
 package com.squareup.spoon;
 
+import com.google.common.base.Strings;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
+
 import com.android.ddmlib.AndroidDebugBridge;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.InstallException;
 import com.android.ddmlib.SyncService;
 import com.android.ddmlib.logcat.LogCatMessage;
-import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
-import com.google.common.base.Strings;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Multimap;
+import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
+import com.github.rtyley.android.screenshot.paparazzo.OnDemandScreenshotService;
+import com.github.rtyley.android.screenshot.paparazzo.processors.AnimatedGifCreator;
+import com.github.rtyley.android.screenshot.paparazzo.processors.ImageSaver;
+import com.github.rtyley.android.screenshot.paparazzo.processors.ImageScaler;
+import com.squareup.spoon.adapters.TestIdentifierAdapter;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.TrueFileFilter;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -21,11 +31,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.TrueFileFilter;
-import com.squareup.spoon.adapters.TestIdentifierAdapter;
 
 import static com.android.ddmlib.FileListingService.FileEntry;
+import static com.github.rtyley.android.screenshot.paparazzo.processors.util.Dimensions.square;
 import static com.squareup.spoon.Spoon.SPOON_SCREENSHOTS;
 import static com.squareup.spoon.SpoonLogger.logDebug;
 import static com.squareup.spoon.SpoonLogger.logError;
@@ -180,6 +188,18 @@ public final class SpoonDeviceRunner {
     // Create the output directory, if it does not already exist.
     work.mkdirs();
 
+
+    File screenshotDiro = new File(work, "app_" + SPOON_SCREENSHOTS);
+    screenshotDiro.mkdir();
+    File deviceGifFile = new File( screenshotDiro, "something.gif" );
+    File deviceScreenshotDir = new File( screenshotDiro, "other" );
+    deviceScreenshotDir.mkdir();
+    OnDemandScreenshotService screenshotService = new OnDemandScreenshotService(device,
+            new ImageSaver(deviceScreenshotDir),
+            new ImageScaler( new AnimatedGifCreator( deviceGifFile ), square(320)));
+
+    screenshotService.start();
+
     // Initiate device logging.
     SpoonDeviceLogger deviceLogger = new SpoonDeviceLogger(device);
 
@@ -214,6 +234,8 @@ public final class SpoonDeviceRunner {
         builder.setLog(entry.getValue());
       }
     }
+
+    screenshotService.finish();
 
     try {
       logDebug(debug, "About to grab screenshots and prepare output for [%s]", serial);
